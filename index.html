@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827">
+<title>UNO Code Checker</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f4f5f7;margin:0;color:#111827}
+main{max-width:720px;margin:auto;padding:20px}
+.card{background:white;border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 2px 12px #00000010}
+h1{margin:0 0 5px}.muted{color:#6b7280}
+textarea,input{width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:12px;padding:12px;font-size:16px}
+textarea{height:130px;resize:vertical}
+button{border:0;border-radius:12px;padding:11px 14px;font-size:15px;margin:4px;cursor:pointer}
+.primary{background:#111827;color:white}.danger{background:#fee2e2}.gray{background:#e5e7eb}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.stat{padding:9px;background:#f3f4f6;border-radius:12px;text-align:center;font-size:12px}.stat b{display:block;font-size:19px}
+.row{display:flex;align-items:center;gap:8px;border-top:1px solid #eee;padding:12px 0}.code{font-family:monospace;font-size:16px;flex:1;word-break:break-all}.status{font-size:12px}.green{color:#15803d}.red{color:#dc2626}.orange{color:#c2410c}.graytxt{color:#6b7280}
+.small{font-size:12px}
+</style>
+</head>
+<body>
+<main>
+<div class="card">
+<h1>🎴 فاحص أكواد UNO</h1>
+<div class="muted">أداة للآيفون لإدارة وتجربة أكواد UNO Mobile.</div>
+</div>
+
+<div class="card">
+<textarea id="input" placeholder="ألصق الأكواد هنا — كل كود في سطر"></textarea>
+<button class="primary" onclick="addCodes()">إضافة الأكواد</button>
+<button class="gray" onclick="document.getElementById('input').value=''">مسح</button>
+</div>
+
+<div class="card stats">
+<div class="stat"><b id="working">0</b>🟢 يعمل</div>
+<div class="stat"><b id="failed">0</b>🔴 فشل</div>
+<div class="stat"><b id="none">0</b>🟠 بلا جائزة</div>
+<div class="stat"><b id="untested">0</b>⚪ غير مختبر</div>
+</div>
+
+<div class="card">
+<input id="search" placeholder="🔎 ابحث عن كود..." oninput="render()">
+<div id="list"></div>
+</div>
+
+<div class="card">
+<button class="gray" onclick="exportList()">📤 تصدير النتائج</button>
+<button class="danger" onclick="clearAll()">حذف كل البيانات</button>
+<p class="small muted">مهم: الأداة لا تستطيع معرفة صلاحية الكود من تلقاء نفسها بدون نتيجة نظام UNO الرسمي. زر «فتح» يفتح صفحة UNO/البحث، وبعد التجربة اختر حالة الكود.</p>
+</div>
+</main>
+
+<script>
+const KEY='uno_checker_web_v1';
+let items=JSON.parse(localStorage.getItem(KEY)||'[]');
+
+function save(){localStorage.setItem(KEY,JSON.stringify(items));}
+function addCodes(){
+ const lines=document.getElementById('input').value.split(/\n/).map(x=>x.trim()).filter(Boolean);
+ const seen=new Set(items.map(x=>x.code.toLowerCase()));
+ for(const code of lines) if(!seen.has(code.toLowerCase())) {
+   items.push({id:crypto.randomUUID(),code,status:'untested'}); seen.add(code.toLowerCase());
+ }
+ document.getElementById('input').value=''; save(); render();
+}
+function setStatus(id,status){const x=items.find(x=>x.id===id);if(x)x.status=status;save();render();}
+function del(id){items=items.filter(x=>x.id!==id);save();render();}
+function openCode(code){
+ const q=encodeURIComponent('UNO Mobile '+code);
+ window.open('https://www.google.com/search?q='+q,'_blank');
+}
+function render(){
+ const q=document.getElementById('search').value.toLowerCase();
+ const shown=items.filter(x=>x.code.toLowerCase().includes(q));
+ document.getElementById('list').innerHTML=shown.map(x=>{
+  const labels={working:'يعمل',failed:'منتهي / فشل',none:'فتح بلا جائزة',untested:'غير مختبر'};
+  const cls={working:'green',failed:'red',none:'orange',untested:'graytxt'};
+  return `<div class="row"><div style="flex:1"><div class="code">${esc(x.code)}</div><div class="status ${cls[x.status]}">${labels[x.status]}</div></div>
+  <button class="gray" onclick="openCode('${escAttr(x.code)}')">فتح</button>
+  <select onchange="setStatus('${x.id}',this.value)">
+   ${Object.entries(labels).map(([v,l])=>`<option value="${v}" ${v===x.status?'selected':''}>${l}</option>`).join('')}
+  </select>
+  <button class="danger" onclick="del('${x.id}')">×</button></div>`;
+ }).join('');
+ for(const s of ['working','failed','none','untested']) document.getElementById(s==='none'?'none':s).textContent=items.filter(x=>x.status===s).length;
+}
+function exportList(){
+ const text=items.map(x=>x.code+' — '+({working:'يعمل',failed:'منتهي / فشل',none:'فتح بلا جائزة',untested:'غير مختبر'}[x.status])).join('\\n');
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'}));a.download='UNO-Codes.txt';a.click();
+}
+function clearAll(){if(confirm('حذف جميع الأكواد والنتائج؟')){items=[];save();render();}}
+function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function escAttr(s){return s.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}
+render();
+</script>
+</body>
+</html>
